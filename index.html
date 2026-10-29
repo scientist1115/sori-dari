@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3b4a">
+<title>소리다리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one-column instrument panel, tabs on top; audiogram conventions (Hz on x, dB going down) */
+:root{
+  --bg:#eef2f1; --panel:#ffffff; --ink:#13262c; --muted:#5b6f74; --line:#d3dcdb;
+  --accent:#0f6e7e; --accent-ink:#ffffff; --signal:#e0702a; --good:#2f8a4f; --bad:#c2423a;
+  --wave-in:#9aaeb2; --wave-out:#0f6e7e; --band:rgba(47,138,79,.12);
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0e1719; --panel:#152225; --ink:#e3ecec; --muted:#93a7aa; --line:#27383b;
+  --accent:#4cc0cf; --accent-ink:#06191c; --signal:#f19a5c; --good:#5cc27f; --bad:#ef7a70;
+  --wave-in:#56696d; --wave-out:#4cc0cf; --band:rgba(92,194,127,.14); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1719; --panel:#152225; --ink:#e3ecec; --muted:#93a7aa; --line:#27383b;
+  --accent:#4cc0cf; --accent-ink:#06191c; --signal:#f19a5c; --good:#5cc27f; --bad:#ef7a70;
+  --wave-in:#56696d; --wave-out:#4cc0cf; --band:rgba(92,194,127,.14); color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-top:14px;flex-wrap:wrap}
+h1{font-size:24px;margin:0;letter-spacing:-.01em}
+h1 small{font:500 12px var(--f-mono);color:var(--muted);margin-left:6px;letter-spacing:.04em}
+h2{font-size:17px;margin:0 0 8px;text-wrap:balance}
+h3{font-size:15px;margin:14px 0 4px}
+p{margin:0 0 8px}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+nav{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bg);z-index:10}
+nav button{border:0;background:transparent;color:var(--muted);font:500 14px var(--f-body);padding:9px 2px;border-radius:9px;cursor:pointer}
+nav button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0}
+.warn{border-left:4px solid var(--signal)}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.grow{flex:1 1 160px;min-width:0}
+button.btn{font:600 15px var(--f-body);border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:10px 14px;cursor:pointer}
+button.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.btn.big{width:100%;padding:16px;font-size:17px}
+button.btn.good{background:var(--good);border-color:var(--good);color:#fff}
+button.btn.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--signal);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+label{font-size:14px}
+.field{display:flex;flex-direction:column;gap:2px;min-width:0}
+.field .lab{display:flex;justify-content:space-between;gap:8px;font-size:13px;color:var(--muted)}
+.field .lab b{color:var(--ink);font-family:var(--f-mono);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select,textarea,input[type=text],input[type=number]{font:14px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%}
+textarea{min-height:80px;resize:vertical}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;border:1px solid var(--line);border-radius:10px;padding:3px}
+.seg button{border:0;background:transparent;color:var(--ink);font:500 14px var(--f-body);padding:9px 4px;border-radius:7px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.toggles{display:grid;gap:8px}
+.tog{display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--line);border-radius:10px}
+.tog input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.tog span small{display:block;color:var(--muted);font-size:12.5px;line-height:1.45}
+canvas{width:100%;display:block;border-radius:10px;background:var(--bg)}
+.meter{height:8px;background:var(--bg);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--accent);transition:width .05s}
+.legend{display:flex;gap:14px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:5px;border-radius:2px}
+.stat{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat div{background:var(--bg);border-radius:10px;padding:8px 10px}
+.stat small{display:block;color:var(--muted);font-size:12px}
+.stat b{font:600 16px var(--f-mono)}
+.freqrow{display:grid;grid-template-columns:62px 1fr 62px 74px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.freqrow:last-child{border-bottom:0}
+.freqrow .f{font:600 14px var(--f-mono)}
+.freqrow .v{font:13px var(--f-mono);text-align:right}
+.freqrow .v.saved{color:var(--good);font-weight:600}
+.freqrow button{padding:8px 4px;font-size:13px}
+.chip{display:inline-block;font:600 12px var(--f-mono);padding:3px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--line)}
+.trialword{font-size:44px;font-weight:700;text-align:center;letter-spacing:.04em;padding:10px 0}
+.tablewrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.notes p,.notes li{max-width:65ch}
+.notes ul,.notes ol{padding-left:20px;margin:4px 0 10px}
+.notes a{color:var(--accent)}
+.phase{border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.phase .tag{font:600 11px var(--f-mono);letter-spacing:.08em;color:var(--signal);text-transform:uppercase}
+.bars{display:grid;gap:6px;margin-top:8px}
+.bar{display:grid;grid-template-columns:120px 1fr 56px;gap:8px;align-items:center;font-size:13px}
+.bar .t{height:14px;background:var(--bg);border-radius:4px;overflow:hidden}
+.bar .t i{display:block;height:100%}
+@media (max-width:420px){.freqrow{grid-template-columns:52px 1fr 56px 64px;gap:6px}.bar{grid-template-columns:90px 1fr 50px}}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>소리다리 <small>SOUND BRIDGE · 실험판</small></h1>
+  <span class="muted mono" id="latency">지연 —</span>
+</header>
+
+<nav role="tablist" aria-label="화면">
+  <button role="tab" id="t-live" aria-selected="true">변환</button>
+  <button role="tab" id="t-hear" aria-selected="false">청력 체크</button>
+  <button role="tab" id="t-exp" aria-selected="false">실험</button>
+  <button role="tab" id="t-notes" aria-selected="false">조사·설계</button>
+</nav>
+
+<!-- ========== 변환 ========== -->
+<section id="v-live" class="wrap" style="gap:14px">
+  <div class="panel warn">
+    <b>시작 전에</b>
+    <p class="muted" style="margin:4px 0 0">유선 이어폰을 꽂고 폰 볼륨을 낮게 시작하세요. 스피커로 들으면 '삐-' 하울링이 날 수 있어요. 이 앱은 실험용이며 보청기·인공와우를 대신하지 않습니다.</p>
+  </div>
+
+  <div class="panel">
+    <button class="btn primary big" id="micBtn">마이크 켜고 실시간 변환 시작</button>
+    <div style="margin-top:12px" class="meter" aria-label="입력 크기"><i id="meter"></i></div>
+    <div class="row" style="justify-content:space-between;margin-top:6px">
+      <span class="muted" style="font-size:12.5px">입력 크기 <span class="mono" id="dbv">— dBFS</span></span>
+      <span class="chip" id="modeChip">주파수 낮추기</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>소리 그래프</h2>
+    <canvas id="spec" height="190" aria-label="입력과 출력 주파수 스펙트럼"></canvas>
+    <div class="legend" style="margin-top:6px">
+      <span><i style="background:var(--wave-in)"></i>들어온 소리</span>
+      <span><i style="background:var(--wave-out)"></i>내보내는 소리</span>
+      <span><i style="background:var(--signal)"></i>낮추기 시작점</span>
+      <span><i style="background:var(--good);opacity:.4;height:8px"></i>청력 체크상 잘 들린 범위</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>소리 처리 방식</h2>
+    <div class="seg" role="group" aria-label="소리 처리 방식">
+      <button data-mode="orig">원음</button>
+      <button data-mode="lower">주파수 낮추기</button>
+      <button data-mode="silent">소리 끔</button>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:8px" id="modeDesc"></p>
+
+    <div id="lowerBox" class="toggles" style="margin-top:6px">
+      <div class="field">
+        <div class="lab"><span>이 주파수 위만 낮추기</span><b id="cutV">2000 Hz</b></div>
+        <input type="range" id="cut" min="800" max="4000" step="100">
+      </div>
+      <div class="field">
+        <div class="lab"><span>낮추는 비율 (0.5 = 한 옥타브 아래)</span><b id="ratioV">0.60</b></div>
+        <input type="range" id="ratio" min="0.35" max="0.95" step="0.05">
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:12px">
+      <div class="lab"><span>출력 크기</span><b id="volV">0 dB</b></div>
+      <input type="range" id="vol" min="-30" max="18" step="1">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>추가 신호</h2>
+    <div class="toggles">
+      <label class="tog"><input type="checkbox" id="eq"><span>내 청력에 맞춘 증폭
+        <small>청력 체크 결과로 안 들리는 대역을 더 키워요 (절반 이득 규칙, 최대 +18dB).</small></span></label>
+      <label class="tog"><input type="checkbox" id="tact"><span>촉각 신호 (250Hz 웅웅 소리)
+        <small>말소리 크기를 따라 피부가 가장 민감한 250Hz 진동음을 냅니다. 폰이나 진동 스피커를 손·턱에 대고 느껴보세요.</small></span></label>
+      <label class="tog"><input type="checkbox" id="vib"><span>폰 진동 모터 <span class="chip" id="vibSupport">확인 중</span>
+        <small>말소리가 있을 때마다 짧게 진동해요. 안드로이드 크롬에서만 됩니다(iPhone 웹은 진동 미지원).</small></span></label>
+      <label class="tog"><input type="checkbox" id="ns"><span>에코·잡음 억제 (브라우저 기능)
+        <small>스피커 사용 시 하울링을 줄여주지만 자음이 뭉개질 수 있어요. 바꾸면 마이크를 다시 켜야 적용됩니다.</small></span></label>
+    </div>
+    <div class="field" style="margin-top:12px">
+      <div class="lab"><span>반응 시작 크기 (진동·촉각)</span><b id="gateV">-50 dBFS</b></div>
+      <input type="range" id="gate" min="-75" max="-20" step="1">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>난청 시뮬레이션 <span class="muted" style="font-weight:400;font-size:13px">정상 청력 친구 실험용</span></h2>
+    <p class="muted" style="font-size:13.5px">출력의 고음을 잘라 고음 난청처럼 들리게 합니다. 친구들과 '낮추기가 도움이 되는지' 먼저 안전하게 실험할 때 써요.</p>
+    <select id="sim" aria-label="난청 시뮬레이션">
+      <option value="0">끔</option>
+      <option value="3000">약한 고음 난청 (3000Hz 위 차단)</option>
+      <option value="2000">중간 고음 난청 (2000Hz 위 차단)</option>
+      <option value="1500">심한 고음 난청 (1500Hz 위 차단)</option>
+      <option value="1000">매우 심한 고음 난청 (1000Hz 위 차단)</option>
+    </select>
+  </div>
+</section>
+
+<!-- ========== 청력 체크 ========== -->
+<section id="v-hear" class="wrap" hidden style="gap:14px">
+  <div class="panel warn">
+    <b>간이 청력 체크 (보정 안 된 상대값)</b>
+    <p class="muted" style="margin:4px 0 0">조용한 곳에서 같은 이어폰, 같은 폰 볼륨으로 끝까지 진행하세요. 각 주파수에서 <b>재생</b>을 누르고 슬라이더를 아주 작게 → 조금씩 올려 '삐삐' 소리가 겨우 들리는 지점에서 <b>저장</b>. 병원 청력검사가 아니며, 앱 설정을 정하는 데만 씁니다.</p>
+  </div>
+  <div class="panel" id="hearRows"></div>
+  <div class="panel">
+    <h2>내 청력 그래프</h2>
+    <p class="muted" style="font-size:13px">청력도처럼 아래로 내려갈수록 덜 들린다는 뜻 (가장 잘 들린 주파수 = 0dB 기준).</p>
+    <svg id="audiogram" viewBox="0 0 640 260" width="100%" role="img" aria-label="상대 청력 그래프"></svg>
+    <div class="row" style="margin-top:10px">
+      <button class="btn primary grow" id="autoBtn">이 결과로 자동 설정</button>
+      <button class="btn" id="clearHear">기록 지우기</button>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:8px" id="autoMsg"></p>
+  </div>
+</section>
+
+<!-- ========== 실험 ========== -->
+<section id="v-exp" class="wrap" hidden style="gap:14px">
+  <div class="panel">
+    <h2>A/B 단어 알아듣기 실험</h2>
+    <p class="muted" style="font-size:13.5px">진행자가 폰을 들고 화면의 단어를 마이크에 말하고, 듣는 사람은 이어폰으로 듣고 따라 말합니다. 앱이 매 시행마다 <b>A(원음)</b>와 <b>B(현재 변환 설정)</b>를 무작위로 섞어 쓰고, 듣는 사람은 어느 조건인지 모릅니다.</p>
+    <div class="toggles" style="margin-top:8px">
+      <div class="field"><div class="lab"><span>참가자 이름/코드</span></div><input type="text" id="pName" placeholder="예: P01 · 시뮬레이션 1500Hz"></div>
+      <div class="field"><div class="lab"><span>시행 수 (A, B 반반)</span><b id="nTV">20</b></div><input type="range" id="nTrials" min="10" max="60" step="2"></div>
+      <div class="field"><div class="lab"><span>단어 목록 (줄바꿈으로 구분 · 고음 자음 ㅅ ㅆ ㅊ ㅎ ㅍ 위주)</span></div><textarea id="words"></textarea></div>
+    </div>
+    <p class="muted" style="font-size:13px;margin-top:8px">B 조건: <span class="mono" id="bDesc"></span></p>
+    <button class="btn primary big" id="startExp" style="margin-top:6px">실험 시작</button>
+  </div>
+
+  <div class="panel" id="trialBox" hidden>
+    <div class="row" style="justify-content:space-between">
+      <span class="mono" id="trialN">1 / 20</span>
+      <button class="chip" id="revealBtn" style="cursor:pointer">조건 보기</button>
+    </div>
+    <div class="trialword" id="trialWord">사슴</div>
+    <p class="muted" style="text-align:center;font-size:13px;margin-top:-6px">평소 크기로 한 번 또박또박 말하고, 듣는 사람의 대답을 판정하세요.</p>
+    <div class="row" style="margin-top:8px">
+      <button class="btn good grow" id="okBtn">맞힘</button>
+      <button class="btn bad grow" id="noBtn">틀림</button>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <button class="btn grow" id="skipBtn">이 단어 건너뛰기</button>
+      <button class="btn" id="stopExp">중단</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>결과</h2>
+    <div id="results"><p class="muted">아직 기록이 없어요.</p></div>
+    <div class="row" style="margin-top:10px">
+      <button class="btn" id="csvBtn">CSV 내려받기</button>
+      <button class="btn" id="copyBtn">CSV 복사</button>
+      <button class="btn" id="clearRes">기록 지우기</button>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin-top:6px" id="copyMsg"></p>
+  </div>
+</section>
+
+<!-- ========== 조사·설계 ========== -->
+<section id="v-notes" class="wrap notes" hidden style="gap:14px">
+  <div class="panel">
+    <h2>조사 노트: 무엇이 '잘 들리는' 소리인가</h2>
+    <h3>1. 가장 흔한 난청은 고음이 먼저 사라진다</h3>
+    <p>감음신경성 난청의 대표적인 모양은 고주파로 갈수록 청력이 나빠지는 경사형이고, 저주파에는 청력이 남아 있는 경우가 많습니다. 다만 저음이 안 들리는 역경사형, 중간이 안 들리는 쿠키바이트형도 있어서 <b>"모두에게 잘 들리는 주파수"는 없고, 사람마다 측정이 먼저</b>입니다. 그래서 앱에 청력 체크를 넣었습니다.</p>
+    <h3>2. 말소리의 뜻은 고음 자음에 실려 있다</h3>
+    <p>모음은 저주파에 에너지가 몰려 있어 '말소리가 있다'는 건 알 수 있지만, 단어를 구별하게 해주는 ㅅ·ㅆ·ㅊ·ㅎ·ㅍ 같은 자음은 높은 주파수에 있습니다. 고음 난청이면 "소리는 들리는데 무슨 말인지 모르겠다"가 됩니다.</p>
+    <h3>3. 보청기의 '주파수 낮추기' 기술</h3>
+    <p>실제 보청기에는 차단 주파수 위의 소리를 남은 청력 범위로 끌어내리는 기능(비선형 주파수 압축 NFC, 주파수 전위 등)이 들어 있습니다. 저음 부분은 그대로 두어 모음의 자연스러움을 지키는 게 핵심입니다. 고음 난청이 심할수록 효과를 본 사람이 많았지만, 개인차가 크고 시끄러운 곳에서는 이점이 없었다는 연구도 있습니다. 이 앱의 '주파수 낮추기'는 이 원리를 단순화한 버전입니다(차단점 위 대역만 비율만큼 낮춰 원래 저음에 더함).</p>
+    <h3>4. 피부는 250Hz 진동에 가장 민감하다</h3>
+    <p>손끝의 진동 감각을 맡는 파치니 소체는 약 250Hz에서 가장 예민하고, 대략 65~400Hz 범위에서 반응합니다. 소리와 이 대역의 진동을 함께 주면 작은 소리를 더 잘 알아차렸다는 연구도 있습니다. 그래서 '촉각 신호'를 250Hz로 정했습니다. 폰 진동 모터는 주파수를 고를 수 없고 켜고 끄기만 되므로, 말의 리듬(음절)을 전달하는 용도로 씁니다.</p>
+    <h3>참고 자료</h3>
+    <ul>
+      <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC2705616" target="_blank" rel="noopener">고음 난청 성인·아동 대상 다채널 NFC 평가 (PMC)</a></li>
+      <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5963461" target="_blank" rel="noopener">보청기 NFC의 청지각 효과 리뷰 (Journal of Otology)</a></li>
+      <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4886852" target="_blank" rel="noopener">소음 속 주파수 낮추기 기법 비교 (PMC)</a></li>
+      <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6577777" target="_blank" rel="noopener">파치니 채널 감도 250Hz, 65–400Hz (J. Neuroscience)</a></li>
+      <li><a href="https://nur.nu.edu.kz/handle/123456789/9585" target="_blank" rel="noopener">200–390Hz 진동이 소리 탐지를 높인 연구</a></li>
+      <li><a href="https://www.hearinglife.com/hearing-blog/hearing-technology/what-is-an-audiogram" target="_blank" rel="noopener">청력도 모양과 '스피치 바나나'</a></li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h2>실험 설계</h2>
+    <p><b>연구 질문</b> 고음이 잘 안 들리는 사람에게, 고음 자음을 낮은 주파수로 옮겨 주면 단어를 더 정확히 알아듣는가? 진동을 더하면 말의 시작·리듬을 더 잘 알아차리는가?</p>
+
+    <div class="phase"><span class="tag">0단계 · 준비</span>
+      <ul><li>유선 이어폰 (블루투스는 지연이 커서 결과가 흔들림), 조용한 방, 폰 볼륨 고정</li>
+      <li>진행자 1명이 끝까지 같은 목소리·같은 거리(입~폰 20cm)로 말하기</li></ul></div>
+
+    <div class="phase"><span class="tag">1단계 · 기능 확인</span>
+      <ul><li>'스—', '쉬—' 소리를 내며 소리 그래프를 캡처: 원음 vs 낮추기에서 고음 봉우리가 왼쪽(저음)으로 옮겨가는지</li>
+      <li>지연 측정: 다른 폰으로 녹음하며 박수를 쳐서, 실제 박수와 이어폰에서 나온 박수 사이 간격을 파형에서 재기 (목표 100ms 이하, 넘으면 입 모양과 어긋남)</li></ul></div>
+
+    <div class="phase"><span class="tag">2단계 · 시뮬레이션 실험 (정상 청력 친구)</span>
+      <ul><li>난청 시뮬레이션 1500Hz를 켜서 '고음 난청 상태'를 만들고 A(원음) vs B(낮추기) 비교</li>
+      <li>참가자 10명 이상 × 20단어. 조건은 앱이 무작위 배정, 듣는 사람은 조건을 모름(단일 맹검)</li>
+      <li>측정: 조건별 정답률, 어떤 자음에서 틀렸는지</li>
+      <li>통제 변인: 출력 크기, 단어 난이도, 진행자, 방 소음. 단어를 미리 보여주지 않기</li></ul></div>
+
+    <div class="phase"><span class="tag">3단계 · 최적값 찾기</span>
+      <ul><li>비율 0.5 / 0.6 / 0.7 × 차단점 1500 / 2000 / 3000Hz 조합을 바꿔가며 B 조건 반복 → 정답률 표와 그래프</li>
+      <li>'청력에 맞춘 증폭만' vs '낮추기만' vs '둘 다'를 따로 돌려 어느 효과인지 분리</li></ul></div>
+
+    <div class="phase"><span class="tag">4단계 · 촉각 실험</span>
+      <ul><li>소리 끔 + 촉각 신호(또는 폰 진동)만 켜고, 진행자가 1~4음절 단어를 말하면 음절 수 맞히기</li>
+      <li>또는 말이 시작되는 순간 버튼 누르기 반응시간 비교 (진동 있음/없음)</li></ul></div>
+
+    <div class="phase"><span class="tag">5단계 · 실제 청각장애인 참여 (선택)</span>
+      <ul><li>혼자 진행하지 말고 담당 선생님, 청각장애 특수학교·농아인협회·청능사와 협력</li>
+      <li>본인·보호자 서면 동의, 언제든 중단 가능, 소리는 작게 시작</li>
+      <li>보청기·인공와우 사용자는 그 기기를 빼지 않는 범위에서만 (기기 대체 실험 금지)</li>
+      <li>"의료기기가 아닌 학생 연구"임을 미리 알리기</li></ul></div>
+
+    <div class="phase"><span class="tag">결과 정리</span>
+      <ul><li>조건별 정답률 막대그래프 + 자음별 오류표</li>
+      <li>한계 쓰기: 보정 안 된 이어폰, 브라우저 지연, 시뮬레이션은 실제 난청(소리 왜곡·데드 리전)과 다름</li></ul></div>
+
+    <div class="phase"><span class="tag">하드웨어 확장 아이디어</span>
+      <ul><li>이어폰 단자 → 소형 앰프(PAM8403 등) → 보이스코일 촉각 진동자(haptic exciter)를 손목밴드에 달면 250Hz 촉각 신호를 폰 모터보다 훨씬 또렷하게 전달</li>
+      <li>골전도 이어폰으로 출력해 외이 손상형 난청에 적용해보기</li></ul></div>
+  </div>
+</section>
+</div>
+
+<script>
+/* ---------- 실시간 피치 시프터 (지연선 2탭 크로스페이드) ---------- */
+const WORKLET = `
+class PitchShifter extends AudioWorkletProcessor{
+  static get parameterDescriptors(){return [{name:'ratio',defaultValue:0.6,minValue:0.25,maxValue:2,automationRate:'k-rate'}]}
+  constructor(){super();this.L=Math.floor(sampleRate*0.05);let n=1;while(n<this.L*2+8)n<<=1;this.N=n;this.mask=n-1;this.buf=new Float32Array(n);this.w=0;this.p=0;}
+  tap(d){let pos=this.w-1-d;pos+=this.N;const i0=Math.floor(pos);const fr=pos-i0;const a=this.buf[i0&this.mask],b=this.buf[(i0+1)&this.mask];return a+(b-a)*fr;}
+  process(ins,outs,params){
+    const out=outs[0][0];if(!out)return true;const inp=ins[0]&&ins[0][0];
+    const r=params.ratio[0];const L=this.L;const step=(1-r)/L;
+    for(let i=0;i<out.length;i++){
+      this.buf[this.w]=inp?inp[i]:0;
+      const p1=this.p;let p2=p1+0.5;if(p2>=1)p2-=1;
+      const h1=0.5-0.5*Math.cos(2*Math.PI*p1),h2=0.5-0.5*Math.cos(2*Math.PI*p2);
+      out[i]=this.tap(p1*L)*h1+this.tap(p2*L)*h2;
+      this.p+=step;if(this.p>=1)this.p-=1;else if(this.p<0)this.p+=1;
+      this.w=(this.w+1)&this.mask;
+    }
+    return true;
+  }
+}
+registerProcessor('pitch-shifter',PitchShifter);`;
+
+/* ---------- 상태 ---------- */
+const HEAR_F=[250,500,1000,2000,4000,6000];
+const EQ_F=[250,500,1000,2000,4000];
+const DEFAULT_WORDS="사슴\n수박\n시계\n치즈\n하늘\n학교\n소풍\n책상\n숫자\n씨앗\n참새\n신발\n햇살\n축구\n체육\n상자\n시장\n손수건\n풍선\n피아노\n숲속\n솜사탕\n휴지\n칫솔\n편지\n쌀밥\n코끼리\n토끼\n스키\n싸움";
+const def={mode:'lower',cutoff:2000,ratio:0.6,volDb:0,eq:false,tact:false,vib:false,ns:true,gate:-50,sim:0,thr:{},nTrials:20,words:DEFAULT_WORDS,sessions:[]};
+let S=Object.assign({},def);
+try{const j=JSON.parse(localStorage.getItem('soridari')||'null');if(j)S=Object.assign({},def,j);}catch(e){}
+function save(){try{localStorage.setItem('soridari',JSON.stringify(S));}catch(e){}}
+
+let ctx=null,N={},src=null,stream=null,running=false,lastVib=0,override=null;
+const $=id=>document.getElementById(id);
+
+/* ---------- 오디오 그래프 ---------- */
+async function ensureCtx(){
+  if(!ctx){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    ctx=new AC({latencyHint:'interactive'});
+    const url=URL.createObjectURL(new Blob([WORKLET],{type:'application/javascript'}));
+    await ctx.audioWorklet.addModule(url);
+    build();
+  }
+  if(ctx.state!=='running')await ctx.resume();
+}
+const G=v=>{const g=ctx.createGain();g.gain.value=v;return g;};
+function biq(type,f,q){const b=ctx.createBiquadFilter();b.type=type;b.frequency.value=f;if(q!=null)b.Q.value=q;return b;}
+function build(){
+  N.in=G(1);N.bypass=G(0);N.lowerSum=G(0);
+  N.lp=biq('lowpass',2000,0.707);N.hp=biq('highpass',2000,0.707);
+  N.lp2=biq('lowpass',2000,0.707);N.hp2=biq('highpass',2000,0.707);
+  N.shift=new AudioWorkletNode(ctx,'pitch-shifter',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1],channelCount:1,channelCountMode:'explicit'});
+  N.hiGain=G(1.6);N.mix=G(1);
+  N.eq=EQ_F.map(f=>{const b=biq('peaking',f,1.1);b.gain.value=0;return b;});
+  N.comp=ctx.createDynamicsCompressor();Object.assign(N.comp,{});N.comp.threshold.value=-32;N.comp.ratio.value=4;N.comp.knee.value=10;N.comp.attack.value=0.004;N.comp.release.value=0.15;
+  N.vol=G(1);
+  N.tOsc=ctx.createOscillator();N.tOsc.frequency.value=250;N.tGain=G(0);
+  N.limit=ctx.createDynamicsCompressor();N.limit.threshold.value=-6;N.limit.ratio.value=20;N.limit.knee.value=0;N.limit.attack.value=0.001;N.limit.release.value=0.05;
+  N.sim1=biq('lowpass',20000,0.707);N.sim2=biq('lowpass',20000,0.707);N.simAtt=G(1);
+  N.anIn=ctx.createAnalyser();N.anIn.fftSize=2048;N.anIn.smoothingTimeConstant=0.6;
+  N.anOut=ctx.createAnalyser();N.anOut.fftSize=2048;N.anOut.smoothingTimeConstant=0.6;
+  N.in.connect(N.anIn);
+  N.in.connect(N.bypass).connect(N.mix);
+  N.in.connect(N.lp).connect(N.lp2).connect(N.lowerSum);
+  N.in.connect(N.hp).connect(N.hp2).connect(N.shift).connect(N.hiGain).connect(N.lowerSum);
+  N.lowerSum.connect(N.mix);
+  let node=N.mix;N.eq.forEach(b=>{node.connect(b);node=b;});
+  node.connect(N.comp).connect(N.vol).connect(N.limit);
+  N.tOsc.connect(N.tGain).connect(N.limit);
+  N.limit.connect(N.anOut);
+  N.limit.connect(N.sim1).connect(N.sim2).connect(N.simAtt).connect(ctx.destination);
+  N.tOsc.start();
+  apply();
+}
+const set=(p,v)=>p.setTargetAtTime(v,ctx.currentTime,0.02);
+function eqGains(){
+  const rel=relThr();return EQ_F.map(f=>rel[f]==null?0:Math.min(18,Math.max(0,rel[f]*0.5)));
+}
+function cfg(){return override||S;}
+function apply(){
+  updateUI();
+  if(!ctx||!N.in)return;
+  const c=cfg();
+  set(N.bypass.gain,c.mode==='orig'?1:0);
+  set(N.lowerSum.gain,c.mode==='lower'?1:0);
+  [N.lp,N.lp2,N.hp,N.hp2].forEach(b=>set(b.frequency,c.cutoff));
+  N.shift.parameters.get('ratio').setValueAtTime(c.ratio,ctx.currentTime);
+  const g=c.eq?eqGains():EQ_F.map(()=>0);N.eq.forEach((b,i)=>set(b.gain,g[i]));
+  set(N.vol.gain,Math.pow(10,S.volDb/20));
+  const sf=S.sim?S.sim:20000;set(N.sim1.frequency,sf);set(N.sim2.frequency,sf);set(N.simAtt.gain,S.sim?0.4:1);
+  if(!c.tact)set(N.tGain.gain,0);
+}
+
+/* ---------- 마이크 ---------- */
+async function startMic(){
+  try{
+    await ensureCtx();
+    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:S.ns,noiseSuppression:S.ns,autoGainControl:false}});
+    src=ctx.createMediaStreamSource(stream);src.connect(N.in);
+    running=true;$('micBtn').textContent='마이크 끄기';$('micBtn').classList.remove('primary');
+    showLatency();loop();
+  }catch(e){
+    $('micBtn').textContent='마이크를 켤 수 없어요 · 다시 시도';
+    alertMsg(e&&e.name==='NotAllowedError'?'마이크 권한이 거부됐어요. 브라우저 주소창의 권한 설정에서 마이크를 허용해 주세요.':'마이크를 시작하지 못했어요 ('+(e&&e.message||e)+'). https 주소에서 열었는지 확인해 주세요.');
+  }
+}
+function stopMic(){
+  running=false;if(src)src.disconnect();src=null;
+  if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;
+  if(N.tGain)set(N.tGain.gain,0);if(navigator.vibrate)navigator.vibrate(0);
+  $('micBtn').textContent='마이크 켜고 실시간 변환 시작';$('micBtn').classList.add('primary');
+  $('meter').style.width='0';$('dbv').textContent='— dBFS';
+}
+function alertMsg(t){const p=document.createElement('p');p.className='muted';p.style.cssText='font-size:13px;margin-top:8px;color:var(--bad)';p.textContent=t;const box=$('micBtn').parentNode;const old=box.querySelector('.errmsg');if(old)old.remove();p.classList.add('errmsg');box.appendChild(p);}
+function showLatency(){const l=((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000+50;$('latency').textContent='예상 지연 약 '+Math.round(l)+'ms';}
+$('micBtn').onclick=()=>running?stopMic():startMic();
+
+/* ---------- 루프: 크기, 진동, 촉각, 그래프 ---------- */
+const td=new Float32Array(2048);let fIn,fOut;
+function loop(){
+  if(!running)return;
+  N.anIn.getFloatTimeDomainData(td);
+  let s=0;for(let i=0;i<td.length;i++)s+=td[i]*td[i];
+  const db=10*Math.log10(s/td.length+1e-12);
+  $('meter').style.width=Math.max(0,Math.min(100,(db+80)/80*100))+'%';
+  $('dbv').textContent=db.toFixed(0)+' dBFS';
+  const c=cfg();const over=db>S.gate;
+  if(c.tact){const amt=Math.max(0,Math.min(1,(db-S.gate)/30));set(N.tGain.gain,amt*0.5);}
+  const now=performance.now();
+  if(c.vib&&navigator.vibrate&&over&&now-lastVib>90){navigator.vibrate(70);lastVib=now;}
+  drawSpec();
+  requestAnimationFrame(loop);
+}
+const cv=$('spec');const cx=cv.getContext('2d');
+function css(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+function fx(f,w){const a=Math.log(100),b=Math.log(8000);return (Math.log(f)-a)/(b-a)*w;}
+function drawSpec(){
+  const dpr=window.devicePixelRatio||1;const w=cv.clientWidth,h=190;
+  if(cv.width!==Math.round(w*dpr)){cv.width=Math.round(w*dpr);cv.height=Math.round(h*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);cx.clearRect(0,0,w,h);
+  const top=6,bot=h-20,ph=bot-top;
+  // 잘 들린 범위
+  const rel=relThr();const fs=HEAR_F.filter(f=>rel[f]!=null);
+  cx.fillStyle=css('--band');
+  fs.forEach((f,i)=>{if(rel[f]<=20){const x0=fx(f/Math.SQRT2,w),x1=fx(Math.min(8000,f*Math.SQRT2),w);cx.fillRect(Math.max(0,x0),top,x1-Math.max(0,x0),ph);}});
+  // grid
+  cx.strokeStyle=css('--line');cx.fillStyle=css('--muted');cx.font='11px '+css('--f-mono');cx.lineWidth=1;
+  [125,250,500,1000,2000,4000,8000].forEach(f=>{const x=Math.min(w-1,fx(f,w));cx.beginPath();cx.moveTo(x,top);cx.lineTo(x,bot);cx.stroke();const t=f>=1000?(f/1000)+'k':f+'';cx.textAlign=f===8000?'right':'center';cx.fillText(t,x,h-5);});
+  const c=cfg();
+  if(c.mode==='lower'){const x=fx(c.cutoff,w);cx.strokeStyle=css('--signal');cx.lineWidth=2;cx.setLineDash([4,4]);cx.beginPath();cx.moveTo(x,top);cx.lineTo(x,bot);cx.stroke();cx.setLineDash([]);}
+  if(!running||!N.anIn)return;
+  const n=N.anIn.frequencyBinCount;if(!fIn){fIn=new Float32Array(n);fOut=new Float32Array(n);}
+  N.anIn.getFloatFrequencyData(fIn);N.anOut.getFloatFrequencyData(fOut);
+  const nyq=ctx.sampleRate/2;
+  [[fIn,'--wave-in'],[fOut,'--wave-out']].forEach(([arr,col])=>{
+    cx.strokeStyle=css(col);cx.lineWidth=2;cx.beginPath();let started=false;
+    for(let i=1;i<n;i++){const f=i*nyq/n;if(f<100)continue;if(f>8000)break;const x=fx(f,w);const v=Math.max(0,Math.min(1,(arr[i]+100)/80));const y=bot-v*ph;if(!started){cx.moveTo(x,y);started=true;}else cx.lineTo(x,y);}
+    cx.stroke();
+  });
+}
+
+/* ---------- 변환 UI ---------- */
+const MODE_TXT={orig:'마이크 소리를 그대로(크기만 조절) 들려줍니다. 실험의 비교 기준(A)이에요.',lower:'차단점보다 높은 소리(ㅅ·ㅊ·ㅎ 같은 자음)를 정한 비율만큼 낮은 음으로 옮기고, 원래 저음은 그대로 둡니다.',silent:'소리는 내지 않고 진동·촉각 신호만 씁니다.'};
+const MODE_NAME={orig:'원음',lower:'주파수 낮추기',silent:'소리 끔'};
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>{S.mode=b.dataset.mode;save();apply();});
+function bindRange(id,key,fmt,num=true){const el=$(id);el.value=S[key];el.oninput=()=>{S[key]=num?parseFloat(el.value):el.value;save();apply();};}
+bindRange('cut','cutoff');bindRange('ratio','ratio');bindRange('vol','volDb');bindRange('gate','gate');
+['eq','tact','vib','ns'].forEach(k=>{const el=$(k);el.checked=!!S[k];el.onchange=()=>{S[k]=el.checked;save();apply();if(k==='ns'&&running){stopMic();startMic();}};});
+$('sim').value=String(S.sim);$('sim').onchange=()=>{S.sim=parseInt($('sim').value,10);save();apply();};
+$('vibSupport').textContent=('vibrate' in navigator)?'지원됨':'이 기기 미지원';
+function updateUI(){
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===S.mode)));
+  $('modeDesc').textContent=MODE_TXT[S.mode];$('modeChip').textContent=override?'실험 진행 중':MODE_NAME[S.mode];
+  $('lowerBox').style.opacity=S.mode==='lower'?1:.5;
+  $('cutV').textContent=S.cutoff+' Hz';$('ratioV').textContent=Number(S.ratio).toFixed(2);
+  $('volV').textContent=(S.volDb>0?'+':'')+S.volDb+' dB';$('gateV').textContent=S.gate+' dBFS';
+  $('cut').value=S.cutoff;$('ratio').value=S.ratio;$('eq').checked=S.eq;
+  $('bDesc').textContent=bDesc();
+  if(!running)drawSpec();
+}
+function bDesc(){const p=[];p.push(MODE_NAME[S.mode]);if(S.mode==='lower')p.push(S.cutoff+'Hz↑ ×'+Number(S.ratio).toFixed(2));if(S.eq)p.push('맞춤 증폭');if(S.tact)p.push('촉각');if(S.vib)p.push('진동');if(S.sim)p.push('시뮬 '+S.sim+'Hz');return p.join(' · ');}
+
+/* ---------- 청력 체크 ---------- */
+let tone=null,toneTimer=null,playingF=null;
+function relThr(){const v=HEAR_F.filter(f=>S.thr[f]!=null).map(f=>S.thr[f]);if(!v.length)return {};const best=Math.min(...v);const r={};HEAR_F.forEach(f=>{if(S.thr[f]!=null)r[f]=S.thr[f]-best;});return r;}
+function renderHear(){
+  const box=$('hearRows');box.innerHTML='';
+  HEAR_F.forEach(f=>{
+    const row=document.createElement('div');row.className='freqrow';
+    const cur=S.thr[f]!=null?S.thr[f]:-70;
+    row.innerHTML=`<span class="f">${f>=1000?f/1000+'k':f}Hz</span><input type="range" id="hs${f}" min="-95" max="-10" step="1" value="${cur}" aria-label="${f}Hz 소리 크기"><span class="v ${S.thr[f]!=null?'saved':''}" id="hv${f}">${S.thr[f]!=null?S.thr[f]+'dB':cur+'dB'}</span><div style="display:grid;gap:4px"><button class="btn" id="hp${f}">재생</button><button class="btn" id="hsv${f}">저장</button></div>`;
+    box.appendChild(row);
+    const sl=row.querySelector('#hs'+f);
+    sl.oninput=()=>{$('hv'+f).textContent=sl.value+'dB';$('hv'+f).classList.remove('saved');if(playingF===f&&tone)tone.lvl=parseFloat(sl.value);};
+    row.querySelector('#hp'+f).onclick=()=>playingF===f?stopTone():playTone(f,parseFloat(sl.value));
+    row.querySelector('#hsv'+f).onclick=()=>{S.thr[f]=parseFloat(sl.value);save();stopTone();renderHear();drawAudiogram();updateUI();};
+  });
+}
+async function playTone(f,lvl){
+  stopTone();await ensureCtx();
+  const o=ctx.createOscillator();o.frequency.value=f;const g=ctx.createGain();g.gain.value=0;o.connect(g).connect(ctx.destination);o.start();
+  tone={o,g,lvl};playingF=f;$('hp'+f).textContent='정지';
+  const beep=()=>{if(!tone)return;const a=Math.min(Math.pow(10,tone.lvl/20),0.32);const t=ctx.currentTime;
+    for(let k=0;k<3;k++){const s=t+k*0.5;g.gain.setTargetAtTime(a,s,0.01);g.gain.setTargetAtTime(0,s+0.3,0.01);}};
+  beep();toneTimer=setInterval(beep,1800);
+}
+function stopTone(){if(toneTimer)clearInterval(toneTimer);toneTimer=null;if(tone){try{tone.g.gain.cancelScheduledValues(0);tone.g.gain.value=0;tone.o.stop();}catch(e){}}if(playingF&&$('hp'+playingF))$('hp'+playingF).textContent='재생';tone=null;playingF=null;}
+function drawAudiogram(){
+  const svg=$('audiogram');const W=640,H=260,L=56,R=20,T=18,B=34;const maxDb=60;
+  const xs=f=>L+HEAR_F.indexOf(f)/(HEAR_F.length-1)*(W-L-R);const ys=d=>T+Math.min(d,maxDb)/maxDb*(H-T-B);
+  let s=`<rect x="${L}" y="${ys(0)}" width="${W-L-R}" height="${ys(20)-ys(0)}" fill="var(--band)"/>`;
+  for(let d=0;d<=maxDb;d+=10){s+=`<line x1="${L}" x2="${W-R}" y1="${ys(d)}" y2="${ys(d)}" stroke="var(--line)"/><text x="${L-8}" y="${ys(d)+4}" text-anchor="end" font-size="12" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${d}</text>`;}
+  HEAR_F.forEach(f=>{s+=`<line x1="${xs(f)}" x2="${xs(f)}" y1="${T}" y2="${H-B}" stroke="var(--line)"/><text x="${xs(f)}" y="${H-12}" text-anchor="middle" font-size="12" fill="var(--muted)" font-family="IBM Plex Mono,monospace">${f>=1000?f/1000+'k':f}</text>`;});
+  s+=`<text x="12" y="${T+4}" font-size="11" fill="var(--muted)">dB</text>`;
+  const rel=relThr();const pts=HEAR_F.filter(f=>rel[f]!=null);
+  if(pts.length){s+=`<polyline fill="none" stroke="var(--accent)" stroke-width="2.5" points="${pts.map(f=>xs(f)+','+ys(rel[f])).join(' ')}"/>`;
+    pts.forEach(f=>{s+=`<circle cx="${xs(f)}" cy="${ys(rel[f])}" r="6" fill="var(--panel)" stroke="var(--accent)" stroke-width="2.5"/>`;});}
+  else s+=`<text x="${W/2}" y="${H/2}" text-anchor="middle" font-size="14" fill="var(--muted)">위에서 주파수별로 저장하면 그래프가 그려져요</text>`;
+  svg.innerHTML=s;
+}
+function autoSet(){
+  const rel=relThr();const fs=HEAR_F.filter(f=>rel[f]!=null);
+  if(fs.length<3){$('autoMsg').textContent='최소 3개 주파수를 저장해야 자동 설정할 수 있어요.';return;}
+  let cutoff=null;for(let i=0;i<fs.length;i++){if(rel[fs[i]]>25){cutoff=i===0?800:Math.max(800,fs[i-1]);break;}}
+  S.eq=true;
+  if(cutoff){S.mode='lower';S.cutoff=Math.min(4000,Math.round(cutoff/100)*100);S.ratio=Math.max(0.35,Math.min(0.85,Math.round(S.cutoff/4000*20)/20));
+    $('autoMsg').textContent=`${S.cutoff}Hz 위부터 크게 덜 들려서, 그 위 소리를 ×${S.ratio.toFixed(2)}로 낮추고 맞춤 증폭을 켰어요. 실험 탭에서 원음과 비교해 보세요.`;}
+  else{S.mode='orig';$('autoMsg').textContent='주파수 간 차이가 크지 않아서(25dB 이하) 낮추기 대신 원음 + 맞춤 증폭으로 설정했어요.';}
+  save();apply();
+}
+$('autoBtn').onclick=autoSet;
+$('clearHear').onclick=()=>{S.thr={};save();renderHear();drawAudiogram();$('autoMsg').textContent='';updateUI();};
+
+/* ---------- 실험 ---------- */
+let exp=null,reveal=false;
+$('nTrials').value=S.nTrials;$('nTV').textContent=S.nTrials;$('nTrials').oninput=()=>{S.nTrials=parseInt($('nTrials').value,10);$('nTV').textContent=S.nTrials;save();};
+$('words').value=S.words;$('words').oninput=()=>{S.words=$('words').value;save();};
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+$('startExp').onclick=async()=>{
+  const words=shuffle(S.words.split('\n').map(s=>s.trim()).filter(Boolean));
+  const n=S.nTrials;if(words.length<n){$('copyMsg').textContent=`단어가 ${n}개 이상 필요해요 (지금 ${words.length}개).`;return;}
+  if(!running)await startMic();if(!running)return;
+  const conds=shuffle(Array.from({length:n},(_,i)=>i%2?'B':'A'));
+  exp={name:$('pName').value.trim()||'이름 없음',bDesc:bDesc(),snap:JSON.parse(JSON.stringify(S)),words:words.slice(0,n),conds,i:0,rows:[],started:new Date().toISOString()};
+  $('trialBox').hidden=false;$('startExp').disabled=true;showTrial();
+  $('trialBox').scrollIntoView({behavior:'smooth',block:'start'});
+};
+function showTrial(){
+  const c=exp.conds[exp.i];
+  override=c==='A'?Object.assign({},exp.snap,{mode:'orig',eq:false,tact:false,vib:false}):Object.assign({},exp.snap);
+  apply();
+  $('trialN').textContent=(exp.i+1)+' / '+exp.conds.length;$('trialWord').textContent=exp.words[exp.i];
+  $('revealBtn').textContent=reveal?('조건 '+c):'조건 보기';
+}
+function answer(ok){
+  if(!exp)return;exp.rows.push({trial:exp.i+1,word:exp.words[exp.i],cond:exp.conds[exp.i],correct:ok});exp.i++;
+  if(exp.i>=exp.conds.length)finishExp();else showTrial();
+}
+$('okBtn').onclick=()=>answer(true);$('noBtn').onclick=()=>answer(false);
+$('skipBtn').onclick=()=>{if(!exp)return;const extra=S.words.split('\n').map(s=>s.trim()).filter(w=>w&&!exp.words.includes(w));if(extra.length){exp.words[exp.i]=extra[Math.floor(Math.random()*extra.length)];showTrial();}else{$('trialWord').textContent=exp.words[exp.i];}};
+$('revealBtn').onclick=()=>{reveal=!reveal;if(exp)$('revealBtn').textContent=reveal?('조건 '+exp.conds[exp.i]):'조건 보기';};
+$('stopExp').onclick=()=>{if(exp&&exp.rows.length)finishExp();else endExp();};
+function endExp(){exp=null;override=null;$('trialBox').hidden=true;$('startExp').disabled=false;apply();}
+function finishExp(){S.sessions.push({name:exp.name,bDesc:exp.bDesc,started:exp.started,rows:exp.rows});save();endExp();renderResults();}
+function pct(rows,c){const r=rows.filter(x=>x.cond===c);const k=r.filter(x=>x.correct).length;return {n:r.length,k,p:r.length?k/r.length*100:0};}
+function renderResults(){
+  const box=$('results');if(!S.sessions.length){box.innerHTML='<p class="muted">아직 기록이 없어요.</p>';return;}
+  const all=S.sessions.flatMap(s=>s.rows);const A=pct(all,'A'),B=pct(all,'B');
+  let h=`<div class="stat"><div><small>A 원음</small><b>${A.p.toFixed(0)}%</b></div><div><small>B 변환</small><b>${B.p.toFixed(0)}%</b></div><div><small>차이 (B−A)</small><b style="color:${B.p>=A.p?'var(--good)':'var(--bad)'}">${(B.p-A.p>=0?'+':'')+(B.p-A.p).toFixed(0)}%p</b></div></div>`;
+  h+=`<div class="bars">`+[['A 원음',A,'var(--wave-in)'],['B 변환',B,'var(--accent)']].map(([t,o,c])=>`<div class="bar"><span>${t}</span><span class="t"><i style="width:${o.p}%;background:${c}"></i></span><span class="mono">${o.k}/${o.n}</span></div>`).join('')+`</div>`;
+  h+=`<div class="tablewrap" style="margin-top:12px"><table><thead><tr><th>참가자</th><th>B 조건</th><th class="num">A</th><th class="num">B</th></tr></thead><tbody>`+
+    S.sessions.map(s=>{const a=pct(s.rows,'A'),b=pct(s.rows,'B');return `<tr><td>${esc(s.name)}</td><td>${esc(s.bDesc)}</td><td class="num">${a.p.toFixed(0)}%</td><td class="num">${b.p.toFixed(0)}%</td></tr>`;}).join('')+`</tbody></table></div>`;
+  const wrong=all.filter(r=>!r.correct);if(wrong.length){h+=`<p class="muted" style="font-size:13px;margin-top:8px">자주 틀린 단어: ${esc(topWrong(wrong))}</p>`;}
+  h+=`<p class="muted" style="font-size:12.5px;margin-top:6px">참가자가 적으면 우연일 수 있어요. 10명 이상, 사람마다 같은 설정으로 반복해 평균을 비교하세요.</p>`;
+  box.innerHTML=h;
+}
+function topWrong(w){const m={};w.forEach(r=>m[r.word+'('+r.cond+')']=(m[r.word+'('+r.cond+')']||0)+1);return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([k,v])=>k+'×'+v).join(', ');}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function csv(){const lines=['participant,b_condition,started,trial,word,condition,correct'];S.sessions.forEach(s=>s.rows.forEach(r=>lines.push([s.name,s.bDesc,s.started,r.trial,r.word,r.cond,r.correct?1:0].map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(','))));return lines.join('\n');}
+$('csvBtn').onclick=()=>{const b=new Blob(['﻿'+csv()],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='soridari_results.csv';document.body.appendChild(a);a.click();a.remove();};
+$('copyBtn').onclick=()=>{const t=csv();(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>$('copyMsg').textContent='복사했어요. 스프레드시트에 붙여넣으세요.').catch(()=>$('copyMsg').textContent='복사가 막혀 있어요. CSV 내려받기를 써주세요.');};
+$('clearRes').onclick=()=>{if($('clearRes').dataset.arm){S.sessions=[];save();renderResults();$('clearRes').textContent='기록 지우기';delete $('clearRes').dataset.arm;}else{$('clearRes').dataset.arm='1';$('clearRes').textContent='한 번 더 누르면 삭제';setTimeout(()=>{delete $('clearRes').dataset.arm;$('clearRes').textContent='기록 지우기';},3000);}};
+
+/* ---------- 탭 ---------- */
+const TABS=['live','hear','exp','notes'];
+TABS.forEach(t=>$('t-'+t).onclick=()=>{TABS.forEach(x=>{$('v-'+x).hidden=x!==t;$('t-'+x).setAttribute('aria-selected',String(x===t));});if(t!=='hear')stopTone();if(t==='live')drawSpec();window.scrollTo(0,0);});
+
+renderHear();drawAudiogram();renderResults();updateUI();
+window.addEventListener('resize',()=>{if(!running)drawSpec();});
+</script>
+</body>
+</html>

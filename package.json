@@ -1,0 +1,8 @@
+{
+  "name": "sori-dari",
+  "version": "1.0.0",
+  "description": "청각 보조 실험용 실시간 소리 변환 웹앱",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
