@@ -124,6 +124,14 @@ td.num,th.num{text-align:right;font-family:var(--f-mono);font-variant-numeric:ta
   </div>
 
   <div class="panel">
+    <div class="field" style="margin-bottom:10px">
+      <div class="lab"><span>입력 마이크</span><b id="micInfo">—</b></div>
+      <div class="row" style="flex-wrap:nowrap">
+        <select id="micSel" aria-label="입력 마이크 선택" style="flex:1;min-width:0"><option value="">기본 마이크</option></select>
+        <button class="btn" id="micRefresh" style="flex:none">목록 새로고침</button>
+      </div>
+      <p class="muted" style="font-size:12.5px;margin:4px 0 0" id="micHint">DJI 마이크 수신기를 폰 USB-C/라이트닝에 꽂은 뒤 '목록 새로고침'을 누르세요. 처음엔 마이크를 한 번 켜야 이름이 보여요.</p>
+    </div>
     <button class="btn primary big" id="micBtn">마이크 켜고 실시간 변환 시작</button>
     <div style="margin-top:12px" class="meter" aria-label="입력 크기"><i id="meter"></i></div>
     <div class="row" style="justify-content:space-between;margin-top:6px">
@@ -355,7 +363,7 @@ registerProcessor('pitch-shifter',PitchShifter);`;
 const HEAR_F=[250,500,1000,2000,4000,6000];
 const EQ_F=[250,500,1000,2000,4000];
 const DEFAULT_WORDS="사슴\n수박\n시계\n치즈\n하늘\n학교\n소풍\n책상\n숫자\n씨앗\n참새\n신발\n햇살\n축구\n체육\n상자\n시장\n손수건\n풍선\n피아노\n숲속\n솜사탕\n휴지\n칫솔\n편지\n쌀밥\n코끼리\n토끼\n스키\n싸움";
-const def={mode:'lower',cutoff:2000,ratio:0.6,volDb:0,eq:false,tact:false,vib:false,ns:true,gate:-50,sim:0,thr:{},nTrials:20,words:DEFAULT_WORDS,sessions:[]};
+const def={micId:'',mode:'lower',cutoff:2000,ratio:0.6,volDb:0,eq:false,tact:false,vib:false,ns:true,gate:-50,sim:0,thr:{},nTrials:20,words:DEFAULT_WORDS,sessions:[]};
 let S=Object.assign({},def);
 try{const j=JSON.parse(localStorage.getItem('soridari')||'null');if(j)S=Object.assign({},def,j);}catch(e){}
 function save(){try{localStorage.setItem('soridari',JSON.stringify(S));}catch(e){}}
@@ -426,10 +434,18 @@ function apply(){
 async function startMic(){
   try{
     await ensureCtx();
-    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:S.ns,noiseSuppression:S.ns,autoGainControl:false}});
+    const base={echoCancellation:S.ns,noiseSuppression:S.ns,autoGainControl:false,channelCount:1};
+    try{
+      stream=await navigator.mediaDevices.getUserMedia({audio:S.micId?Object.assign({deviceId:{exact:S.micId}},base):base});
+    }catch(err){
+      if(S.micId&&(err.name==='OverconstrainedError'||err.name==='NotFoundError')){
+        S.micId='';save();stream=await navigator.mediaDevices.getUserMedia({audio:base});
+        micNote('선택한 마이크를 찾지 못해 기본 마이크로 켰어요. 수신기 연결을 확인해 주세요.',true);
+      }else throw err;
+    }
     src=ctx.createMediaStreamSource(stream);src.connect(N.in);
     running=true;$('micBtn').textContent='마이크 끄기';$('micBtn').classList.remove('primary');
-    showLatency();loop();
+    showLatency();showMicInfo();listMics();loop();
   }catch(e){
     $('micBtn').textContent='마이크를 켤 수 없어요 · 다시 시도';
     alertMsg(e&&e.name==='NotAllowedError'?'마이크 권한이 거부됐어요. 브라우저 주소창의 권한 설정에서 마이크를 허용해 주세요.':'마이크를 시작하지 못했어요 ('+(e&&e.message||e)+'). https 주소에서 열었는지 확인해 주세요.');
@@ -445,6 +461,37 @@ function stopMic(){
 function alertMsg(t){const p=document.createElement('p');p.className='muted';p.style.cssText='font-size:13px;margin-top:8px;color:var(--bad)';p.textContent=t;const box=$('micBtn').parentNode;const old=box.querySelector('.errmsg');if(old)old.remove();p.classList.add('errmsg');box.appendChild(p);}
 function showLatency(){const l=((ctx.baseLatency||0)+(ctx.outputLatency||0))*1000+50;$('latency').textContent='예상 지연 약 '+Math.round(l)+'ms';}
 $('micBtn').onclick=()=>running?stopMic():startMic();
+
+/* ---------- 입력 마이크 선택 (DJI 등 외부 마이크) ---------- */
+const isDJI=l=>/dji|wireless\s*mic|mic\s*(mini|2|3)/i.test(l||'');
+function micNote(t,bad){const h=$('micHint');h.textContent=t;h.style.color=bad?'var(--bad)':'';}
+async function listMics(){
+  if(!navigator.mediaDevices||!navigator.mediaDevices.enumerateDevices)return;
+  let devs=[];try{devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='audioinput');}catch(e){return;}
+  const sel=$('micSel');sel.innerHTML='';
+  const o0=document.createElement('option');o0.value='';o0.textContent='기본 마이크 (폰 내장)';sel.appendChild(o0);
+  const named=devs.some(d=>d.label);
+  devs.filter(d=>d.deviceId&&d.deviceId!=='default'&&d.deviceId!=='communications').forEach((d,i)=>{
+    const o=document.createElement('option');o.value=d.deviceId;
+    o.textContent=(d.label||('마이크 '+(i+1)))+(isDJI(d.label)?'  (DJI)':'');sel.appendChild(o);
+  });
+  if(S.micId&&[...sel.options].some(o=>o.value===S.micId))sel.value=S.micId;else sel.value='';
+  const dji=devs.find(d=>isDJI(d.label));
+  if(!named)micNote('마이크를 한 번 켜면 연결된 마이크 이름이 보여요.');
+  else if(dji&&sel.value!==dji.deviceId)micNote('DJI 마이크가 연결돼 있어요: '+dji.label+'. 목록에서 고르면 바로 바뀝니다.');
+  else if(dji)micNote('DJI 마이크로 입력 중이에요. 송신기를 말하는 사람 옷깃에 달면 입과의 거리가 일정해져요.');
+  else micNote('DJI 마이크 수신기를 꽂거나 블루투스로 연결한 뒤 \'목록 새로고침\'을 누르세요.');
+}
+function showMicInfo(){
+  if(!stream)return;const t=stream.getAudioTracks()[0];if(!t)return;
+  const s=t.getSettings?t.getSettings():{};const sr=s.sampleRate||(ctx&&ctx.sampleRate);
+  $('micInfo').textContent=(sr?Math.round(sr/1000)+'kHz':'')+(isDJI(t.label)?' · DJI':'');
+  if(s.sampleRate&&s.sampleRate<32000)micNote(`이 마이크는 ${Math.round(s.sampleRate/1000)}kHz로 들어와 ${Math.round(s.sampleRate/2000)}kHz 위 소리(ㅅ·ㅊ 고음)가 잘려요. 블루투스 연결이면 USB-C/라이트닝 수신기로 바꿔 주세요.`,true);
+}
+$('micSel').onchange=async()=>{S.micId=$('micSel').value;save();if(running){stopMic();await startMic();}};
+$('micRefresh').onclick=listMics;
+if(navigator.mediaDevices&&navigator.mediaDevices.addEventListener)navigator.mediaDevices.addEventListener('devicechange',listMics);
+listMics();
 
 /* ---------- 루프: 크기, 진동, 촉각, 그래프 ---------- */
 const td=new Float32Array(2048);let fIn,fOut;
